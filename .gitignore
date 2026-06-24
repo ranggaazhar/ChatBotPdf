@@ -1,0 +1,22 @@
+# Node modules
+node_modules/
+*/node_modules/
+
+# Local environment variables
+.env
+.env.local
+.env.*
+
+# Uploaded PDF files
+backend/uploads/
+uploads/
+
+# Build directories
+dist/
+build/
+
+# Logs and system files
+*.log
+.DS_Store
+Thumbs.db
+.gemini/
