@@ -40,7 +40,7 @@ const Login = () => {
       <div className="glass-panel animate-fade login-card">
         <div className="login-logo-header">
           <div className="login-logo-icon">🤖</div>
-          <h2 className="login-logo-text">Chatbot PDF</h2>
+          <h2 className="login-logo-text">ChatAI Tarjih</h2>
         </div>
         <p className="login-subtitle">Selamat datang kembali. Silakan masuk ke akun Anda.</p>
 

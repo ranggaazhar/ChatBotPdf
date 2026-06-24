@@ -29,7 +29,7 @@ const LogTable = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Log Aktivitas & Pencarian User</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Pantau pertanyaan pengguna beserta jawaban yang diberikan oleh Chatbot AI secara real-time.</p>
+          <p style={{ color: 'var(--text-secondary)' }}>Pantau pertanyaan pengguna beserta jawaban yang diberikan oleh ChatAI Tarjih secara real-time.</p>
         </div>
         <button 
           onClick={fetchLogs} 
@@ -67,7 +67,7 @@ const LogTable = ({
                   <th className="admin-th" style={{ width: '15%' }}>Pengguna</th>
                   <th className="admin-th" style={{ width: '20%' }}>Sesi Percakapan (Thread)</th>
                   <th className="admin-th" style={{ width: '30%' }}>Pertanyaan User (Query)</th>
-                  <th className="admin-th" style={{ width: '20%' }}>Jawaban AI (Chatbot)</th>
+                  <th className="admin-th" style={{ width: '20%' }}>Jawaban AI (ChatAI Tarjih)</th>
                   <th className="admin-th" style={{ width: '15%' }}>Waktu Percakapan</th>
                 </tr>
               </thead>

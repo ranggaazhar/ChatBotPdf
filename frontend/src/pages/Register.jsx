@@ -38,7 +38,7 @@ const Register = () => {
       <div className="glass-panel animate-fade register-card">
         <div className="register-logo-header">
           <div className="register-logo-icon">🤖</div>
-          <h2 className="register-logo-text">Chatbot PDF</h2>
+          <h2 className="register-logo-text">ChatAI Tarjih</h2>
         </div>
         <p className="register-subtitle">Daftar akun baru untuk mulai menjelajahi dokumen Anda.</p>
 
