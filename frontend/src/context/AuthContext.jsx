@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import { authService } from '../services/authService';
 
 const AuthContext = createContext(null);
 
@@ -6,9 +7,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [loading, setLoading] = useState(true);
-
-  // Endpoint Backend
-  const API_URL = 'http://localhost:5000/api';
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -18,22 +16,12 @@ export const AuthProvider = ({ children }) => {
       }
 
       try {
-        const response = await fetch(`${API_URL}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setUser(data.user);
-        } else {
-          // Token tidak valid atau kadaluarsa
-          logout();
-        }
+        const data = await authService.getMe();
+        setUser(data.user);
       } catch (error) {
         console.error('Gagal mengambil data user:', error);
-        // Biarkan session lokal jika error jaringan saja
+        // Token tidak valid atau kadaluarsa, reset session
+        logout();
       } finally {
         setLoading(false);
       }
@@ -55,7 +43,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, API_URL }}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

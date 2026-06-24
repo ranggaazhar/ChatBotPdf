@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
 const User = require('./User');
-const Document = require('./Document');
+const ChatThread = require('./ChatThread');
 
 const ChatLog = sequelize.define('ChatLog', {
   id: {
@@ -18,14 +18,15 @@ const ChatLog = sequelize.define('ChatLog', {
       key: 'id'
     }
   },
-  documentId: {
+  threadId: {
     type: DataTypes.INTEGER,
-    allowNull: true,
-    field: 'document_id',
+    allowNull: false,
+    field: 'thread_id',
     references: {
-      model: Document,
+      model: ChatThread,
       key: 'id'
-    }
+    },
+    onDelete: 'CASCADE'
   },
   query: {
     type: DataTypes.TEXT,
@@ -43,7 +44,7 @@ const ChatLog = sequelize.define('ChatLog', {
 User.hasMany(ChatLog, { foreignKey: 'userId', as: 'chatLogs' });
 ChatLog.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
-Document.hasMany(ChatLog, { foreignKey: 'documentId', as: 'chatLogs' });
-ChatLog.belongsTo(Document, { foreignKey: 'documentId', as: 'document' });
+ChatThread.hasMany(ChatLog, { foreignKey: 'threadId', as: 'messages' });
+ChatLog.belongsTo(ChatThread, { foreignKey: 'threadId', as: 'thread' });
 
 module.exports = ChatLog;

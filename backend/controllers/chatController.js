@@ -1,23 +1,14 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { Document, ChatLog } = require('../models');
+const { Document, ChatThread, ChatLog } = require('../models');
 require('dotenv').config();
 
+// 1. Kirim Pesan / Tanya Jawab Global
 exports.handleChat = async (req, res) => {
   try {
-    const { documentId, query, mode } = req.body; // mode: 'chat' atau 'summary'
+    let { threadId, query } = req.body;
 
-    if (!documentId) {
-      return res.status(400).json({ message: 'ID dokumen wajib disertakan.' });
-    }
-
-    if (mode === 'chat' && (!query || query.trim() === '')) {
+    if (!query || query.trim() === '') {
       return res.status(400).json({ message: 'Pertanyaan tidak boleh kosong.' });
-    }
-
-    // Ambil dokumen dari database
-    const document = await Document.findByPk(documentId);
-    if (!document) {
-      return res.status(404).json({ message: 'Dokumen tidak ditemukan.' });
     }
 
     // Pastikan API Key Gemini terkonfigurasi
@@ -28,49 +19,79 @@ exports.handleChat = async (req, res) => {
       });
     }
 
-    // Inisialisasi Gemini AI
-    const genAI = new GoogleGenerativeAI(apiKey);
-
-    let prompt = '';
-    let finalQuery = query;
-
-    if (mode === 'summary') {
-      finalQuery = 'Minta Ringkasan Dokumen';
-      prompt = `Berikut adalah teks isi dokumen PDF yang bernama "${document.title}":
-      
---- MULAI TEKS DOKUMEN ---
-${document.textContent}
---- SELESAI TEKS DOKUMEN ---
-
-Tugas Anda adalah:
-1. Buat ringkasan (summary) yang komprehensif, terstruktur dengan baik (gunakan poin-poin/bullet points jika perlu), dan mudah dimengerti dalam Bahasa Indonesia.
-2. Jelaskan poin-poin penting, tujuan dokumen, dan kesimpulan utama dari teks dokumen di atas.
-3. Pastikan ringkasan HANYA didasarkan pada teks dokumen yang disediakan di atas.
-
-Ringkasan:`;
+    // Ambil atau buat ChatThread baru
+    let thread;
+    if (!threadId || threadId === 'new') {
+      const threadTitle = query.length > 30 ? `${query.substring(0, 30)}...` : query;
+      thread = await ChatThread.create({
+        userId: req.user.id,
+        title: threadTitle
+      });
+      threadId = thread.id;
     } else {
-      // Mode chat biasa
-      prompt = `Anda adalah asisten chatbot AI yang ramah, profesional, dan cerdas. Tugas Anda adalah membantu user menjawab pertanyaan mengenai isi dokumen PDF bernama "${document.title}".
+      thread = await ChatThread.findOne({
+        where: { id: threadId, userId: req.user.id }
+      });
+      if (!thread) {
+        return res.status(404).json({ message: 'Sesi percakapan tidak ditemukan.' });
+      }
+    }
 
-Berikut adalah teks isi dokumen sebagai referensi Anda:
+    // Ambil seluruh dokumen yang diunggah oleh admin
+    const allDocs = await Document.findAll({
+      attributes: ['title', 'textContent']
+    });
 
---- MULAI TEKS DOKUMEN ---
-${document.textContent}
---- SELESAI TEKS DOKUMEN ---
+    if (allDocs.length === 0) {
+      const responseText = 'Maaf, administrator belum mengunggah dokumen referensi apapun di database kami. Silakan hubungi admin Anda untuk mengunggah dokumen PDF terlebih dahulu.';
+      
+      // Catat log
+      await ChatLog.create({
+        userId: req.user.id,
+        threadId: threadId,
+        query: query,
+        response: responseText
+      });
 
-Ketentuan menjawab:
-1. Jawab pertanyaan user secara sopan, ramah, dan mendalam dalam Bahasa Indonesia.
-2. Jawab HANYA berdasarkan informasi yang tertera di dalam teks dokumen di atas.
-3. Jika jawaban dari pertanyaan user tidak ada di dalam dokumen, katakan secara jujur dan sopan: "Maaf, saya tidak menemukan informasi tersebut di dalam dokumen." Jangan mencoba mengarang jawaban di luar isi dokumen.
-4. Gunakan pemformatan markdown yang bersih (misal tebal, miring, atau daftar poin) untuk membuat jawaban Anda mudah dibaca.
+      return res.json({
+        message: 'Pesan berhasil dibalas (No document fallback).',
+        threadId,
+        threadTitle: thread.title,
+        response: responseText
+      });
+    }
+
+    // Satukan isi dokumen sebagai satu context besar
+    const contextText = allDocs.map((doc, index) => 
+      `--- DOKUMEN REFERENSI ${index + 1}: ${doc.title} ---\n${doc.textContent}`
+    ).join('\n\n');
+
+    // Buat strict system prompt
+    const prompt = `Anda adalah asisten chatbot AI khusus yang membantu user dengan memberikan jawaban HANYA berdasarkan isi dokumen-dokumen PDF di bawah ini.
+
+Berikut adalah teks isi dari seluruh dokumen PDF referensi Anda:
+
+${contextText}
+
+--- SELESAI DOKUMEN ---
+
+ATURAN MENJAWAB (MANDATORI):
+1. **Sapaan & Basa-basi Ringan**: Anda diperbolehkan membalas sapaan, salam, perkenalan diri, dan basa-basi ringan dari user secara ramah, hangat, singkat, dan alami (seperti: "Halo! Ada yang bisa saya bantu hari ini?", "Hai! Selamat pagi. Bagaimana saya bisa membantu Anda hari ini?", dll.). **JANGAN** menyebutkan batasan dokumen, larangan menjawab, atau nama berkas PDF dalam sapaan ramah Anda ini. Buatlah sapaan tersebut terdengar natural dan menyenangkan.
+2. **Pertanyaan Spesifik/Informasi**: Untuk pertanyaan yang mencari informasi, data faktual, bantuan tugas, pembuatan kode, resep, atau pengetahuan umum lainnya, Anda HANYA boleh menjawab jika jawabannya tertulis secara eksplisit atau implisit di dalam dokumen referensi di atas.
+3. **Penolakan di Luar Konteks**: Jika user menanyakan informasi spesifik yang tidak tertera di dalam dokumen di atas, Anda WAJIB menolak menjawab dengan kalimat berikut secara persis:
+   "Maaf, saya tidak dapat menjawab pertanyaan tersebut karena di luar konteks dokumen yang sedang kita bahas."
+4. Jangan pernah memberikan jawaban dari pengetahuan umum Anda sendiri untuk hal-hal spesifik. Batasi referensi Anda 100% pada teks dokumen di atas.
+5. Jawab dalam Bahasa Indonesia yang sopan dan terstruktur rapi menggunakan pemformatan markdown yang bersih.
 
 Pertanyaan User: ${query}
 
 Jawaban Anda:`;
-    }
+
+    // Inisialisasi Gemini AI
+    const genAI = new GoogleGenerativeAI(apiKey);
 
     // Panggil API Gemini dengan Multi-Model Fallback & Retry (Mengatasi 503 / 429 pada Free Tier)
-    const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.1-pro'];
+    const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.5-flash'];
     let result = null;
     let success = false;
     let lastError = null;
@@ -90,7 +111,7 @@ Jawaban Anda:`;
           retries--;
           lastError = apiError;
           console.warn(`[Gemini API] Error pada model ${modelName} (Sisa percobaan: ${retries}):`, apiError.message);
-
+          
           if (apiError.status && apiError.status !== 503 && apiError.status !== 429) {
             retries = 0; // Jangan retry jika error bukan karena overload/rate limit (misal API key salah)
           } else {
@@ -116,20 +137,83 @@ Jawaban Anda:`;
     // Catat ke log percakapan di database MySQL
     await ChatLog.create({
       userId: req.user ? req.user.id : null,
-      documentId: document.id,
-      query: finalQuery,
+      threadId: threadId,
+      query: query,
       response: responseText
     });
 
     return res.json({
-      message: mode === 'summary' ? 'Ringkasan berhasil dibuat.' : 'Pesan berhasil dibalas.',
+      message: 'Pesan berhasil dibalas.',
+      threadId,
+      threadTitle: thread.title,
       response: responseText
     });
 
   } catch (error) {
-    console.error('Error saat memproses chatbot/summary:', error);
+    console.error('Error saat memproses chatbot:', error);
     return res.status(500).json({
-      message: 'Terjadi kesalahan saat memproses chatbot. Pastikan GEMINI_API_KEY Anda valid.'
+      message: 'Terjadi kesalahan saat memproses chatbot. Hubungi administrator.'
     });
+  }
+};
+
+// 2. Ambil Semua Sesi Chat (Threads) Milik User Aktif
+exports.getThreads = async (req, res) => {
+  try {
+    const threads = await ChatThread.findAll({
+      where: { userId: req.user.id },
+      order: [['createdAt', 'DESC']]
+    });
+    return res.json({ threads });
+  } catch (error) {
+    console.error('Error getThreads:', error);
+    return res.status(500).json({ message: 'Gagal mengambil riwayat sesi percakapan.' });
+  }
+};
+
+// 3. Ambil Pesan-Pesan di dalam Satu Thread
+exports.getThreadMessages = async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const thread = await ChatThread.findOne({
+      where: { id: threadId, userId: req.user.id }
+    });
+
+    if (!thread) {
+      return res.status(404).json({ message: 'Sesi percakapan tidak ditemukan.' });
+    }
+
+    const messages = await ChatLog.findAll({
+      where: { threadId },
+      order: [['createdAt', 'ASC']]
+    });
+
+    return res.json({
+      thread,
+      messages
+    });
+  } catch (error) {
+    console.error('Error getThreadMessages:', error);
+    return res.status(500).json({ message: 'Gagal mengambil riwayat pesan.' });
+  }
+};
+
+// 4. Hapus Sesi Chat (Thread)
+exports.deleteThread = async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const thread = await ChatThread.findOne({
+      where: { id: threadId, userId: req.user.id }
+    });
+
+    if (!thread) {
+      return res.status(404).json({ message: 'Sesi percakapan tidak ditemukan.' });
+    }
+
+    await thread.destroy(); // Cascade menghapus chat_logs yang terhubung
+    return res.json({ message: 'Sesi percakapan berhasil dihapus.' });
+  } catch (error) {
+    console.error('Error deleteThread:', error);
+    return res.status(500).json({ message: 'Gagal menghapus riwayat percakapan.' });
   }
 };

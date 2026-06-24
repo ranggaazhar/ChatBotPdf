@@ -1,4 +1,4 @@
-const { ChatLog, User, Document } = require('../models');
+const { ChatLog, User, ChatThread } = require('../models');
 
 exports.getSearchLogs = async (req, res) => {
   try {
@@ -10,9 +10,9 @@ exports.getSearchLogs = async (req, res) => {
           attributes: ['id', 'username', 'email']
         },
         {
-          model: Document,
-          as: 'document',
-          attributes: ['id', 'title', 'fileName']
+          model: ChatThread,
+          as: 'thread',
+          attributes: ['id', 'title']
         }
       ],
       order: [['createdAt', 'DESC']]
