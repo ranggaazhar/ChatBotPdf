@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
   FileText, MessageSquare, Send, Sparkles, LogOut, 
-  User as UserIcon, BookOpen, Trash2, ArrowRight 
+  User as UserIcon, BookOpen, Trash2, ArrowRight, Search 
 } from 'lucide-react';
 
 const UserDashboard = () => {
@@ -13,6 +13,7 @@ const UserDashboard = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [docSearch, setDocSearch] = useState('');
   const messagesEndRef = useRef(null);
 
   // Fetch dokumen saat komponen dipasang
@@ -43,6 +44,10 @@ const UserDashboard = () => {
       setError('Gagal menghubungkan ke server.');
     }
   };
+
+  const filteredDocs = documents.filter(doc => 
+    doc.title.toLowerCase().includes(docSearch.toLowerCase())
+  );
 
   const getDocMessages = (docId) => {
     if (!messages[docId]) {
@@ -167,13 +172,27 @@ const UserDashboard = () => {
           Daftar Dokumen PDF
         </div>
 
+        {/* Input Pencarian Dokumen */}
+        {documents.length > 0 && (
+          <div style={styles.sidebarSearchWrapper}>
+            <Search size={16} style={styles.sidebarSearchIcon} />
+            <input
+              type="text"
+              placeholder="Cari dokumen..."
+              value={docSearch}
+              onChange={(e) => setDocSearch(e.target.value)}
+              style={styles.sidebarSearchInput}
+            />
+          </div>
+        )}
+
         <div className="nav-links" style={{ overflowY: 'auto', marginBottom: '20px' }}>
-          {documents.length === 0 ? (
+          {filteredDocs.length === 0 ? (
             <div style={{ padding: '20px 10px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              Belum ada dokumen yang tersedia. Silakan hubungi admin untuk mengunggah berkas.
+              {docSearch ? 'Dokumen tidak ditemukan.' : 'Belum ada dokumen yang tersedia. Silakan hubungi admin untuk mengunggah berkas.'}
             </div>
           ) : (
-            documents.map((doc) => (
+            filteredDocs.map((doc) => (
               <button
                 key={doc.id}
                 onClick={() => handleSelectDoc(doc)}
@@ -333,6 +352,28 @@ const UserDashboard = () => {
 };
 
 const styles = {
+  sidebarSearchWrapper: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    marginBottom: '16px',
+    width: '100%',
+  },
+  sidebarSearchIcon: {
+    position: 'absolute',
+    left: '12px',
+    color: 'var(--text-muted)',
+    pointerEvents: 'none',
+  },
+  sidebarSearchInput: {
+    padding: '8px 12px 8px 36px',
+    fontSize: '0.85rem',
+    borderRadius: '8px',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    border: '1px solid var(--border-glass)',
+    color: 'var(--text-primary)',
+    width: '100%',
+  },
   chatHeader: {
     padding: '16px 30px',
     borderBottom: '1px solid var(--border-glass)',
