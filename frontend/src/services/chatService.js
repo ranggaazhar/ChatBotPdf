@@ -2,10 +2,10 @@ import { ENDPOINTS } from '../constants/endpoints';
 import { apiRequest } from './api';
 
 export const chatService = {
-  sendMessage: async (threadId, query) => {
+  sendMessage: async (threadId, query, model) => {
     return apiRequest(ENDPOINTS.CHAT.BASE, {
       method: 'POST',
-      body: JSON.stringify({ threadId, query })
+      body: JSON.stringify({ threadId, query, model })
     });
   },
   getThreads: async () => {

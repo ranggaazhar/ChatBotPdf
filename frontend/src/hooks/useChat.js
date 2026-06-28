@@ -65,7 +65,7 @@ export const useChat = () => {
     }
   };
 
-  const sendMessage = async (queryText) => {
+  const sendMessage = async (queryText, model = 'gemini') => {
     if (!queryText || queryText.trim() === '') return;
 
     // Tambahkan pesan user secara lokal
@@ -81,7 +81,7 @@ export const useChat = () => {
     setError('');
 
     try {
-      const data = await chatService.sendMessage(activeThreadId, queryText);
+      const data = await chatService.sendMessage(activeThreadId, queryText, model);
 
       // Perbarui respons AI secara lokal
       setMessages(prev => {
@@ -90,6 +90,7 @@ export const useChat = () => {
         if (lastMsg) {
           lastMsg.id = data.chatLogId || lastMsg.id;
           lastMsg.response = data.response;
+          lastMsg.model = data.model || model;
         }
         return copy;
       });

@@ -23,6 +23,7 @@ const UserDashboard = () => {
 
   const [input, setInput] = useState('');
   const [docSearch, setDocSearch] = useState('');
+  const [selectedModel, setSelectedModel] = useState('gemini');
 
   const handleSelectThread = (threadId) => {
     selectThread(threadId);
@@ -38,7 +39,7 @@ const UserDashboard = () => {
     const queryText = suggestedText || input;
     if (!queryText || queryText.trim() === '') return;
 
-    sendMessage(queryText);
+    sendMessage(queryText, selectedModel);
     setInput('');
   };
 
@@ -69,6 +70,8 @@ const UserDashboard = () => {
         input={input}
         setInput={setInput}
         onSendMessage={handleSendMessage}
+        selectedModel={selectedModel}
+        setSelectedModel={setSelectedModel}
       />
     </DashboardLayout>
   );

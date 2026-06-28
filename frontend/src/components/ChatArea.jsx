@@ -10,7 +10,9 @@ const ChatArea = ({
   loading,
   input,
   setInput,
-  onSendMessage
+  onSendMessage,
+  selectedModel,
+  setSelectedModel
 }) => {
   const messagesEndRef = useRef(null);
 
@@ -46,6 +48,34 @@ const ChatArea = ({
             {activeThread ? activeThread.title : 'Percakapan Baru'}
           </span>
         </div>
+
+        {/* Model Selection Dropdown (Temporarily Disabled)
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <label htmlFor="model-select" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+            Model AI:
+          </label>
+          <select
+            id="model-select"
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid var(--border-glass)',
+              color: 'var(--text-main)',
+              borderRadius: '6px',
+              padding: '6px 12px',
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              outline: 'none',
+              transition: 'var(--transition)'
+            }}
+          >
+            <option value="gemini" style={{ backgroundColor: '#0e1220', color: '#ffffff' }}>Gemini (Default)</option>
+            <option value="gpt-4o" style={{ backgroundColor: '#0e1220', color: '#ffffff' }}>GPT-4o (OpenAI)</option>
+            <option value="claude" style={{ backgroundColor: '#0e1220', color: '#ffffff' }}>Claude 3.5 Sonnet (Anthropic)</option>
+          </select>
+        </div>
+        */}
       </div>
 
       {/* Chat Body panel */}
@@ -95,8 +125,15 @@ const ChatArea = ({
                 {msg.response ? (
                   <div className="user-chat-row" style={{ justifyContent: 'flex-start' }}>
                     <div className="user-ai-avatar">🤖</div>
-                    <div className="user-chat-bubble" style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '16px 16px 16px 2px', border: '1px solid var(--border-glass)' }}>
-                      <div className="user-chat-text">{formatMessageText(msg.response)}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div className="user-chat-bubble" style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '16px 16px 16px 2px', border: '1px solid var(--border-glass)' }}>
+                        <div className="user-chat-text">{formatMessageText(msg.response)}</div>
+                      </div>
+                      {msg.model && (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '12px', alignSelf: 'flex-start', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          Model: {msg.model === 'gpt-4o' ? 'GPT-4o' : msg.model === 'claude' ? 'Claude 3.5' : 'Gemini'}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ) : (

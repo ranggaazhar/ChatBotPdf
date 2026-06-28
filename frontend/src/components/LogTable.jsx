@@ -65,9 +65,10 @@ const LogTable = ({
               <thead>
                 <tr>
                   <th className="admin-th" style={{ width: '15%' }}>Pengguna</th>
-                  <th className="admin-th" style={{ width: '20%' }}>Sesi Percakapan (Thread)</th>
-                  <th className="admin-th" style={{ width: '30%' }}>Pertanyaan User (Query)</th>
+                  <th className="admin-th" style={{ width: '15%' }}>Sesi Percakapan (Thread)</th>
+                  <th className="admin-th" style={{ width: '25%' }}>Pertanyaan User (Query)</th>
                   <th className="admin-th" style={{ width: '20%' }}>Jawaban AI (ChatAI Tarjih)</th>
+                  <th className="admin-th" style={{ width: '10%' }}>Model AI</th>
                   <th className="admin-th" style={{ width: '15%' }}>Waktu Percakapan</th>
                 </tr>
               </thead>
@@ -89,6 +90,20 @@ const LogTable = ({
                     </td>
                     <td className="admin-td" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', verticalAlign: 'top', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
                       {log.response?.length > 150 ? `${log.response.substring(0, 150)}...` : log.response}
+                    </td>
+                    <td className="admin-td" style={{ verticalAlign: 'top' }}>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        backgroundColor: 'rgba(255,255,255,0.05)',
+                        border: '1px solid var(--border-glass)',
+                        textTransform: 'uppercase'
+                      }}>
+                        {log.model === 'gpt-4o' ? 'GPT-4o' : log.model === 'claude' ? 'Claude 3.5' : 'Gemini'}
+                      </span>
                     </td>
                     <td className="admin-td" style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                       {new Date(log.createdAt).toLocaleString('id-ID', {
