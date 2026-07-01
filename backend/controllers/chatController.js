@@ -1,6 +1,91 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { Document, ChatThread, ChatLog } = require('../models');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+
+// Helper untuk memecah teks menjadi potongan kecil dengan overlap
+function chunkText(text, chunkSize = 1500, overlap = 300) {
+  const chunks = [];
+  let i = 0;
+  while (i < text.length) {
+    let end = Math.min(i + chunkSize, text.length);
+    if (end < text.length) {
+      const lastBreak = text.substring(end - 100, end).lastIndexOf('\n');
+      if (lastBreak !== -1) {
+        end = end - 100 + lastBreak;
+      } else {
+        const lastSpace = text.substring(end - 30, end).lastIndexOf(' ');
+        if (lastSpace !== -1) {
+          end = end - 30 + lastSpace;
+        }
+      }
+    }
+    chunks.push(text.substring(i, end).trim());
+    i = end - overlap;
+    if (i < 0) i = 0;
+    if (end >= text.length) break;
+  }
+  return chunks.filter(c => c.length > 50);
+}
+
+// Helper untuk mengambil potongan teks yang paling relevan dengan query
+function retrieveRelevantChunks(query, allDocs, maxChunks = 8) {
+  // Indonesian stop words
+  const stopWords = new Set([
+    'dan', 'di', 'ke', 'dari', 'yang', 'adalah', 'itu', 'ini', 'untuk', 'dengan', 
+    'saya', 'kamu', 'dia', 'mereka', 'kita', 'kami', 'pada', 'juga', 'atau', 'dalam',
+    'bisa', 'ada', 'tidak', 'akan', 'oleh', 'sebagai', 'secara', 'untuk', 'telah', 'sudah',
+    'apakah', 'bagaimana', 'mengapa', 'apa', 'siapa', 'kapan', 'dimana'
+  ]);
+
+  // Clean and tokenize query
+  const queryTerms = query.toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(t => t.length > 2 && !stopWords.has(t));
+
+  if (queryTerms.length === 0) {
+    return [];
+  }
+
+  const scoredChunks = [];
+
+  for (const doc of allDocs) {
+    const chunks = chunkText(doc.textContent);
+    chunks.forEach((chunk, index) => {
+      const lowerChunk = chunk.toLowerCase();
+      let score = 0;
+      
+      queryTerms.forEach(term => {
+        // Escape special regex characters in terms
+        const escapedTerm = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const regex = new RegExp(escapedTerm, 'gi');
+        const matches = lowerChunk.match(regex);
+        if (matches) {
+          score += matches.length;
+        }
+      });
+
+      // Bonus for exact phrase match
+      const cleanQuery = query.toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (cleanQuery && lowerChunk.includes(cleanQuery)) {
+        score += 15;
+      }
+
+      if (score > 0) {
+        scoredChunks.push({
+          docTitle: doc.title,
+          chunkIndex: index,
+          content: chunk,
+          score: score
+        });
+      }
+    });
+  }
+
+  scoredChunks.sort((a, b) => b.score - a.score);
+  return scoredChunks.slice(0, maxChunks);
+}
 
 // 1. Kirim Pesan / Tanya Jawab Global
 exports.handleChat = async (req, res) => {
@@ -55,10 +140,12 @@ exports.handleChat = async (req, res) => {
       });
     }
 
-    // Satukan isi dokumen sebagai satu context besar
-    const contextText = allDocs.map((doc, index) => 
-      `--- DOKUMEN REFERENSI ${index + 1}: ${doc.title} ---\n${doc.textContent}`
-    ).join('\n\n');
+    // Ambil potongan dokumen yang paling relevan dengan query untuk menghemat token & mengatasi error 429/503
+    const relevantChunks = retrieveRelevantChunks(query, allDocs);
+    const contextText = relevantChunks.length > 0
+      ? relevantChunks.map((r, idx) => `--- DOKUMEN REFERENSI ${idx + 1}: ${r.docTitle} (Kutipan ${r.chunkIndex + 1}) ---\n${r.content}`).join('\n\n')
+      : 'TIDAK ADA KONTEKS DOKUMEN REFERENSI YANG RELEVAN UNTUK PERTANYAAN INI.';
+
 
     // Buat strict system instruction
     const systemInstruction = `Anda adalah asisten chatbot AI khusus yang membantu user dengan memberikan jawaban HANYA berdasarkan isi dokumen-dokumen PDF di bawah ini.
@@ -237,6 +324,60 @@ ATURAN MENJAWAB (MANDATORI & SANGAT KETAT):
 
   } catch (error) {
     console.error('Error saat memproses chatbot:', error);
+
+    // Deteksi error rate limit (429) atau kuota terlampaui
+    const isRateLimit = 
+      error.status === 429 || 
+      (error.message && (
+        error.message.includes('429') || 
+        error.message.toLowerCase().includes('quota') || 
+        error.message.toLowerCase().includes('rate-limit') || 
+        error.message.toLowerCase().includes('too many requests')
+      )) ||
+      (error.errorDetails && JSON.stringify(error.errorDetails).toLowerCase().includes('quota'));
+
+    // Deteksi error server sibuk / overloaded (503)
+    const isServiceUnavailable = 
+      error.status === 503 ||
+      (error.message && (
+        error.message.includes('503') || 
+        error.message.toLowerCase().includes('busy') || 
+        error.message.toLowerCase().includes('unavailable') || 
+        error.message.toLowerCase().includes('high demand') || 
+        error.message.toLowerCase().includes('overloaded')
+      ));
+
+    if (isRateLimit) {
+      let retryDelay = null;
+
+      // 1. Coba cari dari errorDetails RPC Google
+      if (error.errorDetails && Array.isArray(error.errorDetails)) {
+        const retryInfo = error.errorDetails.find(detail => detail && detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo');
+        if (retryInfo && retryInfo.retryDelay) {
+          retryDelay = retryInfo.retryDelay; // Misal: "48s"
+        }
+      }
+
+      // 2. Coba cari dari string pesan menggunakan regex jika belum ketemu
+      if (!retryDelay && error.message) {
+        const match = error.message.match(/Please retry in ([\d\.]+\s*s(ec(ond)?)?)/i);
+        if (match) {
+          retryDelay = match[1];
+        }
+      }
+
+      const timeInfo = retryDelay ? ` dalam ${retryDelay}` : ' beberapa saat lagi (disarankan menunggu sekitar 1 menit)';
+      return res.status(429).json({
+        message: `Batas penggunaan (rate limit) model AI telah terlampaui. Silakan coba lagi${timeInfo}.`
+      });
+    }
+
+    if (isServiceUnavailable) {
+      return res.status(503).json({
+        message: 'Layanan model AI saat ini sedang mengalami lonjakan permintaan yang tinggi (overloaded/busy). Silakan coba beberapa saat lagi.'
+      });
+    }
+
     return res.status(500).json({
       message: 'Terjadi kesalahan saat memproses chatbot. Hubungi administrator.'
     });

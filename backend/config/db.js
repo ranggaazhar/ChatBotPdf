@@ -1,6 +1,7 @@
 const { Sequelize } = require('sequelize');
 const mysql = require('mysql2/promise');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const host = process.env.DB_HOST || '127.0.0.1';
 const user = process.env.DB_USERNAME || 'root';
